@@ -65,6 +65,7 @@ UNIT_RESP_HDGS = ['StaID', 'Sns0', 'Sns1', 'Sns2', 'Sns3',
 DATA_FILE_HDGS = ['Station', 'DateTime', 'Ohms0', 'Ohms1', 'Ohms2',
                   'Ohms3', 'OhmsRef', 'Vbat', 'Temp', 'OhmsAdj0',
                   ' OhmsAdj1', 'OhmsAdj2', 'OhmsAdj3']
+NO_PLOT_LIST = ['',' ', 'None', '0']
 
 
 AlmMin = 2  # alrm delay in minutes
@@ -324,7 +325,7 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     
     with open(trimfile(FileName, xdays), 'r') as ftrim:
         data = list(reader(ftrim))
-
+        
 # set up plot
     fig, ax1 = plt.subplots()
     ax1.set_xlabel(titleTmStamp, color="orange")
@@ -339,6 +340,7 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     # plt.xticks(rotation=45)
 
     col = StartColDict[Param]
+# TODO--fix this.  Get rid of StartColDict, use headings unit_dir_hdg_index
 #    print ("col = ", col)
     tcol = StartColDict["Temp"]
 #    print ("temp col = ",tcol)
@@ -367,14 +369,15 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
 
     ax1.grid(linestyle='-', linewidth='0.5', color='red')
     ax1.grid(True)
-
-    if IDs['Snsr0_Nm'] != "":
+    
+# TODO here: check ID against a list of "no plots" ['',' ', 'None', '0']
+    if  not (IDs['Snsr0_Nm'] in NO_PLOT_LIST):
         ax1.plot(time, Line0, "ro-", label=IDs['Snsr0_Nm'], markersize=mx)
-    if IDs['Snsr1_Nm'] != "":
+    if IDs['Snsr1_Nm'] != " ":
         ax1.plot(time, Line1, 'gx-', label=IDs['Snsr1_Nm'], markersize=mx)
-    if IDs['Snsr2_Nm'] != "":
+    if IDs['Snsr2_Nm'] != " ":
         ax1.plot(time, Line2, 'b^-', label=IDs['Snsr2_Nm'], markersize=mx)
-    if IDs['Snsr3_Nm'] != "":
+    if IDs['Snsr3_Nm'] != " ":
         ax1.plot(time, Line3, 'ms-', label=IDs['Snsr3_Nm'], markersize=mx)
 
     ax2 = ax1.twinx()
@@ -791,7 +794,7 @@ def main():
             if (len(unit_resp.split(',')) == hdglen):
                 good_response = check_response(unit_resp)   # various checks
             elif(PrintVerbose):
-                print(f' comment or out of order = {unit_resp}, discarded')
+                print(f'discarded comment/out of order = {unit_resp} ')
                 
             # right now, just checks for number of fields
         download_file(StaDict_lcl, StaDict_db)  # This needs to be done asycnch
