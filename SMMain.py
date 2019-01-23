@@ -24,7 +24,7 @@ from dateutil import parser
 
 import contextlib
 from decimal import Decimal
-import fileinput
+# import fileinput
 import csv
 from shutil import copyfile
 # from sys import exit
@@ -72,7 +72,7 @@ AlmMin = 2  # alrm delay in minutes
 # TODO alarm Delay in hours--later read from DB File
 AlarmDelay = round(Decimal(AlmMin / 60), 3)
 PrintTimes = False
-PrintVerbose = True
+PrintVerbose = False
 
 def TODOs():
 
@@ -424,7 +424,7 @@ def ser_wrt(Com, wrtstr):
     for num, char in enumerate(wrtlist):
         ser.write(char.encode())
 
-        time.sleep(.015)
+        time.sleep(.015)    # TODO 15ms delay??
 
     ser.close()
     return True
