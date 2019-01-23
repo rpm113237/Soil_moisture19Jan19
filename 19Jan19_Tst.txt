@@ -1,0 +1,2 @@
+Station,DateTime,Ohms0,Ohms1,Ohms2,Ohms3,OhmsRef,Vbat,Temp,OhmsAdj0,OhmsAdj1,OhmsAdj2,OhmsAdj3
+19Jan19_Tst,01/19/19 06:38, 1218494, 116, 677, 1184, 471, 5.83, 16.31,853191,81,474,829
