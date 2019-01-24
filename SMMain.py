@@ -66,6 +66,8 @@ DATA_FILE_HDGS = ['Station', 'DateTime', 'Ohms0', 'Ohms1', 'Ohms2',
                   'Ohms3', 'OhmsRef', 'Vbat', 'Temp', 'OhmsAdj0',
                   ' OhmsAdj1', 'OhmsAdj2', 'OhmsAdj3']
 NO_PLOT_LIST = ['',' ', 'None', '0']
+PLOT_OHMS = False
+PLOT_OHMS_ADJ = True
 
 
 AlmMin = 2  # alrm delay in minutes
@@ -555,7 +557,9 @@ def tellStation(COM, dictentry, alrmmin):
     if PrintVerbose:
         print(f"Tell the Field Unit: {outstr}")
 
-    ser_wrt(COM, outstr)  # if Station responds AOK, update
+    ser_wrt(COM, outstr)  
+    # if Station responds AOK, update
+    ret_val = False
     StaResp = get_unit_response(COM, 50)    # sb "AOK"; "AWOL" if no response
     if PrintVerbose:
         print(f"Unit TellStation RAW Response is {StaResp}")
@@ -569,10 +573,12 @@ def tellStation(COM, dictentry, alrmmin):
                 for line in fo:
                     print(f'current unit directory: {line}')
         upload_file(StaDict_lcl, StaDict_db)
+        retval = True
+    
     if PrintTimes:
         print(f'tell_station elapsed time = {time.time() - t0}')
 
-    return StaResp
+    return retval
 
 def get_directory_line(unit_report):
 
@@ -824,7 +830,8 @@ def main():
                       f'file length = {data_file_len}  *********\n')
 
         upload_file(lcl_dat_f_nm, ("/" + lcl_dat_f_nm))  # store raw data?
-
+# plotSM('Ohms'.dictline,lcl_dat_f_nm)
+# 'Ohms' can be "Ohms', 'Ohms_adj', 
         plotSM("Ohms", dictline, lcl_dat_f_nm,
                lcl_dat_f_nm.split('.')[0], 3)    # stores in locally
         # TODO dictline and localfile have everything necessary except Title ("Ohms") for plot
