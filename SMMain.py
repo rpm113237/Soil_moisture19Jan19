@@ -292,6 +292,12 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     # TODO label plot = Station Name == filename w/o extension
     # TODO change the plot labels to the StaDict headings
     """
+    def plotSM(Param, trimfile, xdays)
+    rework 24Jan19.  Needs Param (Y axis title); .csv trimfile to be 
+    plotted, number of days looking back (xdays) (could be derived)
+    Unit Name comes from last entry in trim file. pdf will be named using 
+    file name of trimfile
+    
     Produces a plot starting at end of file time stamp (most recent entry)
     (time stamp format 04/19/18 13:41
      back for xdays. The (pdf) plot is named:
@@ -545,6 +551,7 @@ def tellStation(COM, dictentry, alrmmin):
                    "Snsr1_Nm", "Snsr2_Nm", "Snsr3_Nm", "SnsrRef_Nm", "Temp_Nm"]
     """
     t0 = time.time()  # for timing (move this inside
+    ret_aok = False
     CurAdr = dictentry['Station_Name_Old']
     NewAdr = dictentry['Station_Name_New']
     now = datetime.now()
@@ -559,13 +566,15 @@ def tellStation(COM, dictentry, alrmmin):
 
     ser_wrt(COM, outstr)  
     # if Station responds AOK, update
-    ret_val = False
+    
     StaResp = get_unit_response(COM, 50)    # sb "AOK"; "AWOL" if no response
     if PrintVerbose:
         print(f"Unit TellStation RAW Response is {StaResp}")
     StaResp = StaResp.split(';')[0]
     if StaResp == "AOK":
         if CurAdr != NewAdr:
+# TODO !!!!. This isn't going to update file.  Need to write new file
+# TODO !!!! line by line.
             dictentry['Station_Name_Old'] = dictentry['Station_Name_New']
             print(f" Station Name changed from {CurAdr} to {NewAdr}")
         if PrintVerbose:
@@ -578,7 +587,7 @@ def tellStation(COM, dictentry, alrmmin):
     if PrintTimes:
         print(f'tell_station elapsed time = {time.time() - t0}')
 
-    return retval
+    return ret_aok
 
 def get_directory_line(unit_report):
 
@@ -794,28 +803,34 @@ def main():
     while 1:
 
         # only good line here is one with len = len Hdgs--s.b above
+        unit_aok = False
         good_response = False
-        while not good_response:
-            unit_resp = get_unit_response(COM, None)  
-            if (len(unit_resp.split(',')) == hdglen):
-                good_response = check_response(unit_resp)   # various checks
-            elif(PrintVerbose):
-                print(f'discarded comment/out of order = {unit_resp} ')
-                
-            # right now, just checks for number of fields
-        download_file(StaDict_lcl, StaDict_db)  # This needs to be done asycnch
-        # in parallel with get_unit_response. Station is hung up dring download TODO
-# TODO--In upload/download--recover from not being able to access DropBox????
-# makes dict from comma delimited string
-        dictline = get_directory_line(unit_resp)
-        unit_aok = tellStation(COM, dictline, AlarmDelay)
-        # Needs COM since not global
-        # updates StaDict_lcl ONLY if Station says AOK
-        # chks for/creates local/db files entry
-        # returns AOK if good,
-        lcl_dat_f_nm = make_data_file(dictline) # TODO = file NAME
-
-        # TODO deletes old file we can figure out how to do it.  Linux, maybe
+        while not unit_aok:
+            while not good_response:
+                unit_resp = get_unit_response(COM, None)  
+                if (len(unit_resp.split(',')) == hdglen):
+                    good_response = check_response(unit_resp)   # various checks
+                elif(PrintVerbose):
+                    print(f'discarded comment/out of order = {unit_resp} ')
+                    
+            # as of here, we have a good unit data stream
+            download_file(StaDict_lcl, StaDict_db)  
+            # TODO--make this asynch. Station is hung up dring download TODO
+    
+            dictline = get_directory_line(unit_resp) 
+            # dict line = dictionary line UnitDir
+            unit_aok = tellStation(COM, dictline, AlarmDelay)
+            # updates StaDict_lcl ONLY if Station says AOK
+            # chks for/creates local/db files entry
+            # returns True if good response
+        
+        # as of here, we got a good Unit transmission, Unit acknowledged
+        # time update, alarm time, etc. Name change, if any
+        
+        lcl_dat_f_nm = make_data_file(dictline) 
+        # returns file name for data--makes if new, copies if changed
+        # TODO -check out deleting old files locally.
+        
         new_data_list = make_data_file_entry(unit_resp, dictline, unit_aok)
 
         with open(lcl_dat_f_nm, "a+") as fo:
