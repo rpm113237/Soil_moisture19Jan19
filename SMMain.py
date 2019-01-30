@@ -12,6 +12,8 @@ import glob
 import serial
 import time
 import os
+from pandas import DataFrame, read_csv
+import pandas as pd
 # import fileinput
 import dropbox
 from datetime import datetime, timedelta
@@ -26,7 +28,7 @@ import contextlib
 from decimal import Decimal
 # import fileinput
 import csv
-from shutil import copyfile
+# from shutil import copyfile
 # from sys import exit
 
 access_token = "aelnjlQMStkAAAAAAACfyW27v2oV8u5PkHnMELuOUyGbZyOhhQPsBFWt2vffTrO4"
@@ -35,7 +37,7 @@ access_token = "aelnjlQMStkAAAAAAACfyW27v2oV8u5PkHnMELuOUyGbZyOhhQPsBFWt2vffTrO4
 UNIT_DIRECTORY_HDGS = ["Station_Name_Old", "Station_Name_New", "Snsr0_Nm",
                        " Snsr1_Nm", "Snsr2_Nm", "Snsr3_Nm", "SnsrRef_Nm",
                        " Temp_Nm", "Report H.h", "Rpt1", "Rpt2", "Rpt3",
-                       " Rpt4"]
+                       "Rpt4"]
 
 StaDict_lcl = 'StationID_lcl.csv'
 StaDict_db = '/StationID_db.csv'
@@ -63,8 +65,7 @@ UNIT_RESP_HDGS = ['StaID', 'Sns0', 'Sns1', 'Sns2', 'Sns3',
 # to make dict out of Station Response
 
 DATA_FILE_HDGS = ['Station', 'DateTime', 'Ohms0', 'Ohms1', 'Ohms2',
-                  'Ohms3', 'OhmsRef', 'Vbat', 'Temp', 'OhmsAdj0',
-                  ' OhmsAdj1', 'OhmsAdj2', 'OhmsAdj3']
+                  'Ohms3', 'OhmsRef', 'Vbat', 'Temp']
 NO_PLOT_LIST = ['',' ', 'None', '0']
 PLOT_OHMS = False
 PLOT_OHMS_ADJ = True
@@ -221,7 +222,7 @@ def serial_ports():
     """
 
     if sys.platform.startswith('win'):
-        ports = ['COM%s' % str(i + 1) for i in range(2, 256)]
+        ports = ['COM%s' % str(i) for i in range(2, 256)]
         # (2,256) to bump past COM1--which is a windows artifact
     elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
         # this excludes your current terminal "/dev/tty"
@@ -252,29 +253,26 @@ def trimfile(f, xdays):
     is the only one archived
 
     """
-# use enumerate??  cleaner??
-    with open(f, 'r') as fr:
-        xlines = reader(fr)
-        iline = 0
-        for L in xlines:    # just getting to end to read last time
+# try pandas
+    df = pd.read_csv(f)
+    # print(df)
+    last_time = df['DateTime'].max()
 
-            if iline > 0:    # skip over header
-                last_time = L[HeadingsDict["Time"]]
-            iline += 1      # can do with enumerate--save variable
-        if iline <= 1:
-            print("bailing out of ftrim!!!, no lines Should Not")
-            return fr
-        lstimeobj = datetime.strptime(last_time, "%m/%d/%y %H:%M")
-        first_time = lstimeobj - timedelta(days=xdays)
+    lstimeobj = datetime.strptime(last_time, "%m/%d/%y %H:%M")
+    first_time = lstimeobj - timedelta(days=xdays)
+    # df is still open???
+    # print(df)
+    # df = df[datetime.strptime(df.DateTime, "%m/%d/%y %H:%M") > first_time]       #, BAD, even if it works
+    # df.to_csv('example.csv', index = False)
+    # print(df)
 
     with open("ftrim.csv", 'w') as fw:
         with open(f, 'r') as fr:
             xlines = reader(fr) # csv import
-            iline = 0
-            for L in xlines:
+            for iline, L in enumerate (xlines):
             #  ("searching for first time", L )
                 if iline == 0:  #copy header into trim csv file
-                    fw.write(','.join(L)+'\n')
+                    fw.write(','.join(L)+'\n')  # TODO maybe dictline here??
                     # print ("first line, ", L)
                 else:
                     if datetime.strptime(L[HeadingsDict["Time"]],
@@ -283,7 +281,6 @@ def trimfile(f, xdays):
                         # return f
                         fw.write(','.join(L)+'\n')
 
-                iline += 1
 
     return "ftrim.csv"
 
@@ -582,7 +579,7 @@ def tellStation(COM, dictentry, alrmmin):
                 for line in fo:
                     print(f'current unit directory: {line}')
         upload_file(StaDict_lcl, StaDict_db)
-        retval = True
+        ret_aok = True
     
     if PrintTimes:
         print(f'tell_station elapsed time = {time.time() - t0}')
@@ -725,7 +722,7 @@ def ohms_adj(slist, tfact, toff):
         slist.insert(oiadj, adjohms)
         
 
-def make_data_file_entry(unit_resp, unitdict, unit_aok):
+def make_data_file_entry(unit_resp, unitdict,unit_aok):
     """
     unit_resp is the response from the unit--a string
     unitdict is the line from the directory--need it for station name
@@ -822,8 +819,7 @@ def main():
             unit_aok = tellStation(COM, dictline, AlarmDelay)
             # updates StaDict_lcl ONLY if Station says AOK
             # chks for/creates local/db files entry
-            # returns True if good response
-        
+            # returns True if good response        
         # as of here, we got a good Unit transmission, Unit acknowledged
         # time update, alarm time, etc. Name change, if any
         
@@ -831,10 +827,12 @@ def main():
         # returns file name for data--makes if new, copies if changed
         # TODO -check out deleting old files locally.
         
-        new_data_list = make_data_file_entry(unit_resp, dictline, unit_aok)
-
+        # new_data_list = make_data_file_entry(unit_resp, dictline, unit_aok)
+               
+        linelist = unit_resp.split(',')        
+        linelist.insert(data_file_hdg_index['DateTime'], get_time())
         with open(lcl_dat_f_nm, "a+") as fo:
-            line = ",".join(new_data_list) + '\n'    # print (line)
+            line = ",".join(linelist) + '\n'    # print (line)
             print(f'data entered in file {lcl_dat_f_nm} : {line}')
             fo.write(line)
     # have to reset line ptr to zero to count lines??
@@ -844,9 +842,20 @@ def main():
                 print(f'            ****break for readability--not in file;'
                       f'file length = {data_file_len}  *********\n')
 
+
+
         upload_file(lcl_dat_f_nm, ("/" + lcl_dat_f_nm))  # store raw data?
 # plotSM('Ohms'.dictline,lcl_dat_f_nm)
-# 'Ohms' can be "Ohms', 'Ohms_adj', 
+# 'Ohms' can be "Ohms', 'Ohms_adj',
+        rpts = ['Rpt%s' % str(i) for i in range(1, 256)]   # 256 possible report times.
+        for rindex in UNIT_DIRECTORY_HDGS:
+            # print(f'Unit Heading ={rindex}')
+            if rindex in rpts:
+                rpt_tm = dictline[rindex]
+                # print(f'found {rindex} , value = {rpt_tm}')
+                if rpt_tm not in NO_PLOT_LIST:
+                    trimfile(lcl_dat_f_nm,int(rpt_tm))
+                    print(f'ftrim created for {rpt_tm} days')
         plotSM("Ohms", dictline, lcl_dat_f_nm,
                lcl_dat_f_nm.split('.')[0], 3)    # stores in locally
         # TODO dictline and localfile have everything necessary except Title ("Ohms") for plot
