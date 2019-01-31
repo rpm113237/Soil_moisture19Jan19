@@ -35,8 +35,8 @@ access_token = "aelnjlQMStkAAAAAAACfyW27v2oV8u5PkHnMELuOUyGbZyOhhQPsBFWt2vffTrO4
 # for db instantation
 
 UNIT_DIRECTORY_HDGS = ["Station_Name_Old", "Station_Name_New", "Snsr0_Nm",
-                       " Snsr1_Nm", "Snsr2_Nm", "Snsr3_Nm", "SnsrRef_Nm",
-                       " Temp_Nm", "Report H.h", "Rpt1", "Rpt2", "Rpt3",
+                       "Snsr1_Nm", "Snsr2_Nm", "Snsr3_Nm", "SnsrRef_Nm",
+                       "Temp_Nm", "Report H.h", "Rpt1", "Rpt2", "Rpt3",
                        "Rpt4"]
 
 StaDict_lcl = 'StationID_lcl.csv'
@@ -76,6 +76,9 @@ AlmMin = 2  # alrm delay in minutes
 AlarmDelay = round(Decimal(AlmMin / 60), 3)
 PrintTimes = False
 PrintVerbose = False
+
+TFACT = .064     # temperature offset factor
+TOFF = 23
 
 def TODOs():
 
@@ -279,6 +282,8 @@ def trimfile(f, xdays):
                                          "%m/%d/%y %H:%M") > first_time:
                         # print ("short file")
                         # return f
+                        if PLOT_OHMS_ADJ:
+                            L = ohms_adj(L,TFACT,TOFF)
                         fw.write(','.join(L)+'\n')
 
 
@@ -715,11 +720,11 @@ def ohms_adj(slist, tfact, toff):
      Line0 = [float(i[col])/(1+tfact*(toff-float(i[tcol])))
              for i in data[1::]]
     """
-    oiadj = data_file_hdg_index['OhmsAdj0']
-    
-    for oi in (data_file_hdg_index['Ohms0'], data_file_hdg_index['Ohms3']):
-        adjohms = float(slist[oi])/(1+tfact*(toff-float(slist[oi])))
-        slist.insert(oiadj, adjohms)
+    temp = slist[data_file_hdg_index['Temp']]
+
+    for oi in range (data_file_hdg_index['Ohms0'], (data_file_hdg_index['Ohms3']+1)):
+        slist[oi] = str(int(float(slist[oi])/(1+tfact*(toff-float(temp)))))
+    return slist
         
 
 def make_data_file_entry(unit_resp, unitdict,unit_aok):
@@ -847,7 +852,7 @@ def main():
         upload_file(lcl_dat_f_nm, ("/" + lcl_dat_f_nm))  # store raw data?
 # plotSM('Ohms'.dictline,lcl_dat_f_nm)
 # 'Ohms' can be "Ohms', 'Ohms_adj',
-        rpts = ['Rpt%s' % str(i) for i in range(1, 256)]   # 256 possible report times.
+        rpts = ['Rpt%s' % str(i) for i in range(1, 10)]   # 10 possible report times.
         for rindex in UNIT_DIRECTORY_HDGS:
             # print(f'Unit Heading ={rindex}')
             if rindex in rpts:
@@ -856,6 +861,9 @@ def main():
                 if rpt_tm not in NO_PLOT_LIST:
                     trimfile(lcl_dat_f_nm,int(rpt_tm))
                     print(f'ftrim created for {rpt_tm} days')
+# TODO  rework or new function to adjust raw ohms, change trimfile header
+# so that plot just plots the headers???
+
         plotSM("Ohms", dictline, lcl_dat_f_nm,
                lcl_dat_f_nm.split('.')[0], 3)    # stores in locally
         # TODO dictline and localfile have everything necessary except Title ("Ohms") for plot
@@ -864,5 +872,5 @@ def main():
 
 if __name__ == '__main__':
     # see http://ibiblio.org/g2swap/byteofpython/read/module-name.html
-    # TODO "import as" from SMSubs, avoid . notation
+
     main()
