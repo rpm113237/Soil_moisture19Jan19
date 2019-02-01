@@ -12,6 +12,7 @@ import glob
 import serial
 import time
 import os
+import math
 from pandas import DataFrame, read_csv
 import pandas as pd
 # import fileinput
@@ -257,29 +258,45 @@ def trimfile(f, xdays):
 
     """
 # try pandas
+    # for test --force xdays
+    xdays = 10
     df = pd.read_csv(f)
-    # print(df)
-    last_time = df['DateTime'].max()
+    df['dt_tm'] = df.apply(lambda row: datetime.strptime(row['DateTime'], "%m/%d/%y %H:%M"), axis=1)
+    #df_last = len(df.index)-1    # .index is not zero based
+    first_time_to_plot = df['dt_tm'].max() - timedelta(days=xdays)
+    df = df[df.new_date > first_time_to_plot]
+    xdt_act = df['dt_tm'].max()-df['dt_tm'].min()
+    xdays_act = xdt_act.days + math.ceil(xdt_act.seconds / (3600 * 24))
+    df = df.drop('dt_tm', axis=1)
+    # df.to_csv("pandas_csv.csv")     # NOTE:  .csv file has index column (can be supressed)
+    # df = pd.read_csv('pandas_csv.csv') # picks up index column--unlabelled
 
-    lstimeobj = datetime.strptime(last_time, "%m/%d/%y %H:%M")
-    first_time = lstimeobj - timedelta(days=xdays)
-    # df is still open???
-    # print(df)
-    # df = df[datetime.strptime(df.DateTime, "%m/%d/%y %H:%M") > first_time]       #, BAD, even if it works
-    # df.to_csv('example.csv', index = False)
-    # print(df)
+    # TODO :figure out how to name and store file.
+    # create a named trim file & plot for  report time (in unit directory)
+    # Name file (Station) +_xdays
+    # TODO--use trim days or actual for file name?
+    # If trimfile sees it already exists, don't make it
+    # don't plot it.  plot has to remove the file after plot
+    # trimfile is local--if uploaded, for visibility only. db trim file is
+    # don't upload trim fle. DB data file never downloaded.
 
     with open("ftrim.csv", 'w') as fw:
         with open(f, 'r') as fr:
             xlines = reader(fr) # csv import
+            fatm = datetime.min
             for iline, L in enumerate (xlines):
-            #  ("searching for first time", L )
+
                 if iline == 0:  #copy header into trim csv file
                     fw.write(','.join(L)+'\n')  # TODO maybe dictline here??
                     # print ("first line, ", L)
+
                 else:
+                    #  "searching for first time", L
                     if datetime.strptime(L[HeadingsDict["Time"]],
-                                         "%m/%d/%y %H:%M") > first_time:
+                                         "%m/%d/%y %H:%M") > first_time_to_plot:
+                        if fatm == datetime.min:
+                            fatm = datetime.strptime(L[HeadingsDict["Time"]],
+                                         "%m/%d/%y %H:%M")
                         # print ("short file")
                         # return f
                         if PLOT_OHMS_ADJ:
@@ -289,7 +306,7 @@ def trimfile(f, xdays):
 
     return "ftrim.csv"
 
-def plotSM(Param, IDs, FileName, FileNmBase, xdays):
+def plotSM(Param, unit_id, data_file_name, xdays):
 
     # TODO label plot = Station Name == filename w/o extension
     # TODO change the plot labels to the StaDict headings
@@ -307,8 +324,8 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
 
     Param = String such as Delm, Ohms, Mbars (currently not used)
     Param is only used to label the plot
-    IDs is a list == StaID entry for this file
-    FileName = name of local .txt file with Data in it.
+    unit_id is a list == StaID entry for this file
+    data_file_name = name of local .txt file with Data in it.
     (csv): Station Name, TimeStamp,Data0, Data1, Data2, Data3, Vbat, Temp
 
    Example: plotSM("Ohms", "localdat.txt", "Marsanne", 3)
@@ -321,7 +338,7 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     """
 
 # get last time, temp, Vbat    
-    with open (FileName, 'r') as f:
+    with open (data_file_name, 'r') as f:
         for line in f:
             x = line
     ls = x.split(',')
@@ -333,7 +350,7 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     titleTmStamp = f'{last_time}  {last_temp}(C) {last_Vbat}V'
     titleID = f'{FileBase} (last {xdays} days)'
     
-    with open(trimfile(FileName, xdays), 'r') as ftrim:
+    with open(trimfile(data_file_name, xdays), 'r') as ftrim:
         data = list(reader(ftrim))
         
 # set up plot
@@ -381,20 +398,20 @@ def plotSM(Param, IDs, FileName, FileNmBase, xdays):
     ax1.grid(True)
     
 # TODO here: check ID against a list of "no plots" ['',' ', 'None', '0']
-    if  not (IDs['Snsr0_Nm'] in NO_PLOT_LIST):
-        ax1.plot(time, Line0, "ro-", label=IDs['Snsr0_Nm'], markersize=mx)
-    if IDs['Snsr1_Nm'] != " ":
-        ax1.plot(time, Line1, 'gx-', label=IDs['Snsr1_Nm'], markersize=mx)
-    if IDs['Snsr2_Nm'] != " ":
-        ax1.plot(time, Line2, 'b^-', label=IDs['Snsr2_Nm'], markersize=mx)
-    if IDs['Snsr3_Nm'] != " ":
-        ax1.plot(time, Line3, 'ms-', label=IDs['Snsr3_Nm'], markersize=mx)
+    if  not (unit_id['Snsr0_Nm'] in NO_PLOT_LIST):
+        ax1.plot(time, Line0, "ro-", label=unit_id['Snsr0_Nm'], markersize=mx)
+    if unit_id['Snsr1_Nm'] != " ":
+        ax1.plot(time, Line1, 'gx-', label=unit_id['Snsr1_Nm'], markersize=mx)
+    if unit_id['Snsr2_Nm'] != " ":
+        ax1.plot(time, Line2, 'b^-', label=unit_id['Snsr2_Nm'], markersize=mx)
+    if unit_id['Snsr3_Nm'] != " ":
+        ax1.plot(time, Line3, 'ms-', label=unit_id['Snsr3_Nm'], markersize=mx)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel('Temp(c)', color="yellow")
     #ax2.set_ylim(15, 30)
     plt.yticks(fontsize=8, color="yellow")
-    plt.plot(time, Temp, 'yx--', label=IDs['Temp_Nm'], markersize=mx)
+    plt.plot(time, Temp, 'yx--', label=unit_id['Temp_Nm'], markersize=mx)
     # plots, but need twinx() assigned
 
     ax1.legend(loc=2, prop={'size': 8})
@@ -859,7 +876,9 @@ def main():
                 rpt_tm = dictline[rindex]
                 # print(f'found {rindex} , value = {rpt_tm}')
                 if rpt_tm not in NO_PLOT_LIST:
-                    trimfile(lcl_dat_f_nm,int(rpt_tm))
+                 #   with open (lcl_dat_f_nm, 'r') as fr:
+
+                    trimfile(lcl_dat_f_nm,int(rpt_tm))  # creates trimfile.csv
                     print(f'ftrim created for {rpt_tm} days')
 # TODO  rework or new function to adjust raw ohms, change trimfile header
 # so that plot just plots the headers???
