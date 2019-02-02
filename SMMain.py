@@ -259,17 +259,56 @@ def trimfile(f, xdays):
     """
 # try pandas
     # for test --force xdays
-    xdays = 10
+    # xdays = 10
     df = pd.read_csv(f)
     df['dt_tm'] = df.apply(lambda row: datetime.strptime(row['DateTime'], "%m/%d/%y %H:%M"), axis=1)
-    #df_last = len(df.index)-1    # .index is not zero based
     first_time_to_plot = df['dt_tm'].max() - timedelta(days=xdays)
-    df = df[df.new_date > first_time_to_plot]
+    df = df[df.dt_tm > first_time_to_plot]
+    df_len = len(df)-1  # index starts at zero
     xdt_act = df['dt_tm'].max()-df['dt_tm'].min()
+    last_time = df.at[df_len, 'dt_tm']
+    last_vbat = df.at[df_len, 'Vbat']
+    last_temp = df.at[df_len,'Temp']
     xdays_act = xdt_act.days + math.ceil(xdt_act.seconds / (3600 * 24))
-    df = df.drop('dt_tm', axis=1)
+
+    file_nm_base = df.at[df_len,'Station']
+    titleTmStamp = f'{last_time}  {last_temp}(C) {last_vbat}V'
+    titleID = f'{file_nm_base} (last {xdays} days)'
+
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel(titleTmStamp, color="red", fontsize=12, weight="bold")
+    # ax1.set_ylabel(YaxisDict[Param], color="black")
+    ax1.set_ylabel('Ohms', color="black")
+    # TODO--this only works for ohms; need to have an ohms adjust?
+    # TODO--make an Ohms adjust routine.  Keep raw and adjusted?
+    plt.title(titleID, fontsize=12, weight="bold", color="red")
+
+    # gca stands for 'get current axis'
+    plt.style.use('fivethirtyeight')
+    ax1 = plt.gca()
+    # ax1.set_xlabel(titleTmStamp, color="orange")
+    df.plot(kind='line', x='dt_tm', y='Ohms1', ax=ax1)
+    df.plot(kind='line', x='dt_tm', y='Ohms2', ax=ax1)
+    df.plot(kind='line', x='dt_tm', y='Ohms3', ax=ax1)
+    # df.plot(kind='line', x='dt_tm', y='Ohms0', ax=ax1)
+    ax1.set_xlabel(titleTmStamp)
+
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('Temp(C)', color="magenta")
+    # ax2.set_ylim(15, 30)
+    plt.yticks(fontsize=12, color="magenta")
+    df.plot(kind='line',x='dt_tm', y='Temp', label='Temp(C)', color='magenta', ax=ax2)
+
+    plt.show()
+
+    # df.set_index('dt_tm', inplace = True)
+    df = df['Ohms0']
+    # df.plt.plot()
+    # plt.show()
+    # df = df.drop('dt_tm', axis=1)
     # df.to_csv("pandas_csv.csv")     # NOTE:  .csv file has index column (can be supressed)
     # df = pd.read_csv('pandas_csv.csv') # picks up index column--unlabelled
+    # raw_data['Mycol'] =  pd.to_datetime(raw_data['Mycol'], format='%d%b%Y:%H:%M:%S.%f')
 
     # TODO :figure out how to name and store file.
     # create a named trim file & plot for  report time (in unit directory)
@@ -278,30 +317,13 @@ def trimfile(f, xdays):
     # If trimfile sees it already exists, don't make it
     # don't plot it.  plot has to remove the file after plot
     # trimfile is local--if uploaded, for visibility only. db trim file is
-    # don't upload trim fle. DB data file never downloaded.
+    # don't upload trim fle.
 
-    with open("ftrim.csv", 'w') as fw:
-        with open(f, 'r') as fr:
-            xlines = reader(fr) # csv import
-            fatm = datetime.min
-            for iline, L in enumerate (xlines):
+    # TODO why by bother with the .csv?  why not pass the df?
 
-                if iline == 0:  #copy header into trim csv file
-                    fw.write(','.join(L)+'\n')  # TODO maybe dictline here??
-                    # print ("first line, ", L)
-
-                else:
-                    #  "searching for first time", L
-                    if datetime.strptime(L[HeadingsDict["Time"]],
-                                         "%m/%d/%y %H:%M") > first_time_to_plot:
-                        if fatm == datetime.min:
-                            fatm = datetime.strptime(L[HeadingsDict["Time"]],
-                                         "%m/%d/%y %H:%M")
-                        # print ("short file")
-                        # return f
-                        if PLOT_OHMS_ADJ:
-                            L = ohms_adj(L,TFACT,TOFF)
-                        fw.write(','.join(L)+'\n')
+    # if PLOT_OHMS_ADJ:
+    #     L = ohms_adj(L,TFACT,TOFF)
+    # fw.write(','.join(L)+'\n')
 
 
     return "ftrim.csv"
@@ -357,7 +379,7 @@ def plotSM(Param, unit_id, data_file_name, xdays):
     fig, ax1 = plt.subplots()
     ax1.set_xlabel(titleTmStamp, color="orange")
     ax1.set_ylabel(YaxisDict[Param], color="black")
-## TODO--this only works for ohms; need to have an ohms adjust?
+# TODO--this only works for ohms; need to have an ohms adjust?
 # TODO--make an Ohms adjust routine.  Keep raw and adjusted?
     tfact = .064     # temperature offset factor
     toff = 23
@@ -695,7 +717,6 @@ def make_data_file(dictline):
 
     else:   # no data file exists.
 
-
         with open(filenm, "w") as fo:     # creates and opens
             fo.write(','.join(DATA_FILE_HDGS) + '\n')
 #        fo.write("Station, DateTime, Ohms0, Ohms1, Ohms2, Ohms3," +
@@ -831,7 +852,7 @@ def main():
                     good_response = check_response(unit_resp)   # various checks
                 elif(PrintVerbose):
                     print(f'discarded comment/out of order = {unit_resp} ')
-                    
+
             # as of here, we have a good unit data stream
             download_file(StaDict_lcl, StaDict_db)  
             # TODO--make this asynch. Station is hung up dring download TODO
@@ -839,11 +860,12 @@ def main():
             dictline = get_directory_line(unit_resp) 
             # dict line = dictionary line UnitDir
             unit_aok = tellStation(COM, dictline, AlarmDelay)
-            # updates StaDict_lcl ONLY if Station says AOK
+            # tellStation updates StaDict_lcl ONLY if Station says AOK
             # chks for/creates local/db files entry
             # returns True if good response        
         # as of here, we got a good Unit transmission, Unit acknowledged
         # time update, alarm time, etc. Name change, if any
+        # unit should be back asleep
         
         lcl_dat_f_nm = make_data_file(dictline) 
         # returns file name for data--makes if new, copies if changed
