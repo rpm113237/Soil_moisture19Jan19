@@ -19,6 +19,7 @@ import pandas as pd
 import dropbox
 from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
+from matplotlib import ticker as ticker
 from csv import reader
 from csv import DictReader
 from dateutil import parser
@@ -276,6 +277,9 @@ def trimfile(f, xdays):
     titleTmStamp = f'{last_time}  {last_temp}(C) {last_vbat}V'
     titleID = f'{file_nm_base} (last {xdays} days)'
 
+    # from matplotlib import rcParams
+    # rcParams.update({'figure.autolayout': True})
+
     fig, ax1 = plt.subplots()
     ax1.set_xlabel(titleTmStamp, color="red", fontsize=12, weight="bold")
     # ax1.set_ylabel(YaxisDict[Param], color="black")
@@ -296,6 +300,11 @@ def trimfile(f, xdays):
 
     ax2 = ax1.twinx()
     ax2.set_ylabel('Temp(C)', color="magenta")
+    l = ax1.get_ylim()
+    l2 = ax2.get_ylim()
+    f = lambda x: l2[0] + (x - l[0]) / (l[1] - l[0]) * (l2[1] - l2[0])
+    ticks = f(ax1.get_yticks())
+    ax2.yaxis.set_major_locator(ticker.FixedLocator(ticks))
     # ax2.set_ylim(15, 30)
     plt.yticks(fontsize=12, color="magenta")
     df.plot(kind='line', x='dt_tm', y='Temp', label='Temp(C)', color='magenta', ax=ax2)
