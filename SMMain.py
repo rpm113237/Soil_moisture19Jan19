@@ -264,6 +264,7 @@ def trimfile(f, xdays):
     df['dt_tm'] = df.apply(lambda row: datetime.strptime(row['DateTime'], "%m/%d/%y %H:%M"), axis=1)
     first_time_to_plot = df['dt_tm'].max() - timedelta(days=xdays)
     df = df[df.dt_tm > first_time_to_plot]
+    df.reset_index(inplace=True)
     df_len = len(df)-1  # index starts at zero
     xdt_act = df['dt_tm'].max()-df['dt_tm'].min()
     last_time = df.at[df_len, 'dt_tm']
@@ -297,18 +298,21 @@ def trimfile(f, xdays):
     ax2.set_ylabel('Temp(C)', color="magenta")
     # ax2.set_ylim(15, 30)
     plt.yticks(fontsize=12, color="magenta")
-    df.plot(kind='line',x='dt_tm', y='Temp', label='Temp(C)', color='magenta', ax=ax2)
+    df.plot(kind='line', x='dt_tm', y='Temp', label='Temp(C)', color='magenta', ax=ax2)
 
-    plt.show()
-
-    # df.set_index('dt_tm', inplace = True)
-    df = df['Ohms0']
-    # df.plt.plot()
     # plt.show()
-    # df = df.drop('dt_tm', axis=1)
-    # df.to_csv("pandas_csv.csv")     # NOTE:  .csv file has index column (can be supressed)
-    # df = pd.read_csv('pandas_csv.csv') # picks up index column--unlabelled
-    # raw_data['Mycol'] =  pd.to_datetime(raw_data['Mycol'], format='%d%b%Y:%H:%M:%S.%f')
+    # time.sleep(10)
+
+    lcl_pdf_file = file_nm_base + "_" + str(xdays) + ".pdf"
+    db_pdf_file = "/" + lcl_pdf_file
+
+    plt.savefig(lcl_pdf_file, facecolor="b", transparent=False,
+                bbox_inches="tight")
+
+    upload_file(lcl_pdf_file, db_pdf_file)
+
+    # plt.close('all')
+
 
     # TODO :figure out how to name and store file.
     # create a named trim file & plot for  report time (in unit directory)
@@ -877,7 +881,7 @@ def main():
         linelist.insert(data_file_hdg_index['DateTime'], get_time())
         with open(lcl_dat_f_nm, "a+") as fo:
             line = ",".join(linelist) + '\n'    # print (line)
-            print(f'data entered in file {lcl_dat_f_nm} : {line}')
+            print(f'data entered in file {lcl_dat_f_nm} : {line}', end='')
             fo.write(line)
     # have to reset line ptr to zero to count lines??
         if PrintVerbose:
@@ -901,12 +905,13 @@ def main():
                  #   with open (lcl_dat_f_nm, 'r') as fr:
 
                     trimfile(lcl_dat_f_nm,int(rpt_tm))  # creates trimfile.csv
-                    print(f'ftrim created for {rpt_tm} days')
+                    # print(f'ftrim created for {rpt_tm} days')
+        plt.close('all')
 # TODO  rework or new function to adjust raw ohms, change trimfile header
 # so that plot just plots the headers???
 
-        plotSM("Ohms", dictline, lcl_dat_f_nm,
-               lcl_dat_f_nm.split('.')[0], 3)    # stores in locally
+        # plotSM("Ohms", dictline, lcl_dat_f_nm,
+        #        lcl_dat_f_nm.split('.')[0], 3)    # stores in locally
         # TODO dictline and localfile have everything necessary except Title ("Ohms") for plot
     return   # proforma return.  Never executes
 
