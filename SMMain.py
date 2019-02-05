@@ -14,6 +14,7 @@ import time
 import os
 import math
 from pandas import DataFrame, read_csv
+import numpy as np
 import pandas as pd
 # import fileinput
 import dropbox
@@ -30,7 +31,7 @@ import contextlib
 from decimal import Decimal
 # import fileinput
 import csv
-# from shutil import copyfile
+from shutil import copyfile
 # from sys import exit
 
 access_token = "aelnjlQMStkAAAAAAACfyW27v2oV8u5PkHnMELuOUyGbZyOhhQPsBFWt2vffTrO4"
@@ -68,7 +69,7 @@ UNIT_RESP_HDGS = ['StaID', 'Sns0', 'Sns1', 'Sns2', 'Sns3',
 
 DATA_FILE_HDGS = ['Station', 'DateTime', 'Ohms0', 'Ohms1', 'Ohms2',
                   'Ohms3', 'OhmsRef', 'Vbat', 'Temp']
-NO_PLOT_LIST = ['',' ', 'None', '0']
+NO_PLOT_LIST = ['', ' ', 'None', '0']
 PLOT_OHMS = False
 PLOT_OHMS_ADJ = True
 
@@ -156,8 +157,8 @@ def upload_file(lcl_f, db_f):
         dbx.files_upload(f.read(), db_f, mode=dropbox.files.WriteMode.overwrite,
                          mute=True)
         # f.read uploads all characters in file
-    if PrintTimes:
-        print_time(f'Time to upload {lcl_f}', at0)
+    #if PrintTimes:
+    print_time(f'Time to upload {lcl_f}', at0)
     #f.close()
     return
 
@@ -172,8 +173,8 @@ def download_file(lcl_f, db_f):
     dbx = dropbox.Dropbox(access_token)
     with open(lcl_f, 'w') as f:    # overwrites local file
         dbx.files_download_to_file(lcl_f, db_f)
-    if PrintTimes:
-        print_time(f'Time to download {lcl_f}', at0)
+    #if PrintTimes:
+    print_time(f'Time to download {db_f}', at0)
 #    f.close()
     return
 
@@ -248,7 +249,7 @@ def serial_ports():
     return result
 
 
-def trimfile(f, xdays):
+def trimfile(f, xdays, dictline):
     """
     finds the last time stamp in file f (the master file)
     returns a file ftrim that starts xdays before the last time stamp, ends
@@ -256,6 +257,7 @@ def trimfile(f, xdays):
     if there is no timestamp xdays back, returns the entire file f
     trimfile is a working file.  Not archived.  The master file (f)
     is the only one archived
+    :param dictline:
 
     """
 # try pandas
@@ -270,7 +272,7 @@ def trimfile(f, xdays):
     xdt_act = df['dt_tm'].max()-df['dt_tm'].min()
     last_time = df.at[df_len, 'dt_tm']
     last_vbat = df.at[df_len, 'Vbat']
-    last_temp = df.at[df_len,'Temp']
+    last_temp = df.at[df_len, 'Temp']
     xdays_act = xdt_act.days + math.ceil(xdt_act.seconds / (3600 * 24))
 
     file_nm_base = df.at[df_len,'Station']
@@ -283,7 +285,7 @@ def trimfile(f, xdays):
     fig, ax1 = plt.subplots()
     ax1.set_xlabel(titleTmStamp, color="red", fontsize=12, weight="bold")
     # ax1.set_ylabel(YaxisDict[Param], color="black")
-    ax1.set_ylabel('Ohms', color="black")
+
     # TODO--this only works for ohms; need to have an ohms adjust?
     # TODO--make an Ohms adjust routine.  Keep raw and adjusted?
     plt.title(titleID, fontsize=12, weight="bold", color="red")
@@ -292,22 +294,42 @@ def trimfile(f, xdays):
     plt.style.use('fivethirtyeight')
     ax1 = plt.gca()
     # ax1.set_xlabel(titleTmStamp, color="orange")
-    df.plot(kind='line', x='dt_tm', y='Ohms1', ax=ax1)
-    df.plot(kind='line', x='dt_tm', y='Ohms2', ax=ax1)
-    df.plot(kind='line', x='dt_tm', y='Ohms3', ax=ax1)
-    # df.plot(kind='line', x='dt_tm', y='Ohms0', ax=ax1)
+    ltp = [dictline['Snsr0_Nm'], dictline['Snsr1_Nm'], dictline['Snsr2_Nm'],  # ltp = labels to plot
+           dictline['Snsr3_Nm'], dictline['Temp_Nm']]   # easier typing
+    if PLOT_OHMS_ADJ:
+        pst = time.time()
+        df['adj_0'] = df.apply(lambda x: ohms_adj(x.Ohms0, x.Temp, TFACT, TOFF), axis=1)
+        df['adj_1'] = df.apply(lambda x: ohms_adj(x.Ohms1, x.Temp, TFACT, TOFF), axis=1)
+        df['adj_2'] = df.apply(lambda x: ohms_adj(x.Ohms2, x.Temp, TFACT, TOFF), axis=1)
+        df['adj_3'] = df.apply(lambda x: ohms_adj(x.Ohms3, x.Temp, TFACT, TOFF), axis=1)
+        df.rename({'adj_0': ltp[0], 'adj_1': ltp[1], 'adj_2': ltp[2], 'adj_3': ltp[3], 'Temp': ltp[4]},
+                  axis=1, inplace=True)
+        ax1.set_ylabel('Ohms(C)', color="Red", weight='bold')
+        num_entries = len(df.index)
+        print_time(f"time to calc temp adjustments for {num_entries} entries (X4)", pst)
+    else:
+        df.rename({'Ohms0': ltp[0], 'Ohms1': ltp[1], 'Ohms2': ltp[2], 'Ohms3': ltp[3], 'Temp': ltp[4]},
+                  axis=1, inplace=True)
+        ax1.set_ylabel('Ohms', color="black", weight='bold')
+
+
+
+    for ltag in ltp[0:4]:   # doesn't include end pt
+        if ltag not in NO_PLOT_LIST:
+            # print(f'column to be plotted {ltag}')
+            df.plot(kind='line', x='dt_tm', y=ltag, ax=ax1)
+
     ax1.set_xlabel(titleTmStamp)
 
     ax2 = ax1.twinx()
-    ax2.set_ylabel('Temp(C)', color="magenta")
-    l = ax1.get_ylim()
-    l2 = ax2.get_ylim()
-    f = lambda x: l2[0] + (x - l[0]) / (l[1] - l[0]) * (l2[1] - l2[0])
-    ticks = f(ax1.get_yticks())
-    ax2.yaxis.set_major_locator(ticker.FixedLocator(ticks))
-    # ax2.set_ylim(15, 30)
+    ax2.set_ylabel('Temp(C)', color="magenta", weight='bold')
+
     plt.yticks(fontsize=12, color="magenta")
-    df.plot(kind='line', x='dt_tm', y='Temp', label='Temp(C)', color='magenta', ax=ax2)
+    df.plot(kind='line', x='dt_tm', y=ltp[4], color='magenta', ax=ax2)
+    ax1.set_yticks(calculate_ticks(ax1, 10))
+    ax2.set_yticks(calculate_ticks(ax2, 10))
+    ax1.legend(loc=2, prop={'size': 8})
+    ax2.legend(loc=1, prop={"size": 8})
 
     # plt.show()
     # time.sleep(10)
@@ -322,24 +344,26 @@ def trimfile(f, xdays):
 
     # plt.close('all')
 
-
-    # TODO :figure out how to name and store file.
-    # create a named trim file & plot for  report time (in unit directory)
-    # Name file (Station) +_xdays
     # TODO--use trim days or actual for file name?
-    # If trimfile sees it already exists, don't make it
-    # don't plot it.  plot has to remove the file after plot
+    # TODO If trimfile sees it already exists, don't make it
+    # TODO don't plot it.  plot has to remove the file after plot
     # trimfile is local--if uploaded, for visibility only. db trim file is
     # don't upload trim fle.
 
-    # TODO why by bother with the .csv?  why not pass the df?
-
-    # if PLOT_OHMS_ADJ:
-    #     L = ohms_adj(L,TFACT,TOFF)
-    # fw.write(','.join(L)+'\n')
-
-
     return "ftrim.csv"
+
+def calculate_ticks(ax, ticks, round_to=0.1, center=False):
+    upperbound = np.ceil(ax.get_ybound()[1]/round_to)
+    lowerbound = np.floor(ax.get_ybound()[0]/round_to)
+    dy = upperbound - lowerbound
+    fit = np.floor(dy/(ticks - 1)) + 1
+    dy_new = (ticks - 1)*fit
+    if center:
+        offset = np.floor((dy_new - dy)/2)
+        lowerbound = lowerbound - offset
+    # TODO diddle this so it becomes a multiple of 1,2,5
+    values = np.linspace(lowerbound, lowerbound + dy_new, ticks)
+    return values*round_to
 
 def plotSM(Param, unit_id, data_file_name, xdays):
 
@@ -385,7 +409,7 @@ def plotSM(Param, unit_id, data_file_name, xdays):
     titleTmStamp = f'{last_time}  {last_temp}(C) {last_Vbat}V'
     titleID = f'{FileBase} (last {xdays} days)'
     
-    with open(trimfile(data_file_name, xdays), 'r') as ftrim:
+    with open(trimfile(data_file_name, xdays, ), 'r') as ftrim:
         data = list(reader(ftrim))
         
 # set up plot
@@ -476,7 +500,7 @@ def ser_wrt(Com, wrtstr):
 
     '''
     # TODO-- figure out transmitter delay issue.
-
+    at0 = time.time()
     try:
         ser = serial.Serial(Com, baudrate=9600, timeout=None)
     except serial.SerialException as e:
@@ -486,9 +510,10 @@ def ser_wrt(Com, wrtstr):
     for num, char in enumerate(wrtlist):
         ser.write(char.encode())
 
-        time.sleep(.015)    # TODO 15ms delay??
+        # time.sleep(.015)    # TODO 15ms delay??
 
     ser.close()
+    print_time('time for write to unit:', at0)
     return True
 # ???? there may be more error checking on write??
 
@@ -511,20 +536,32 @@ def get_unit_response(COM, howlong):
     except serial.SerialException as e:
         print(f"could not open serial port '{COM}': {e}")
         return "None"
-    if PrintVerbose:
-        print(f'reached get_unit_response, Print Times = {PrintTimes}')
 
     at0 = time.time()
-    lineraw = (ser.readline().decode(encoding='UTF-8',
-                                     errors='ignore'))
-    # Note--if timeout min len is 1--\n
-    # errors= 'ignore'--means ignore undecodeable characters
-    line = lineraw.replace('\x00', '')  # strip nulls (shouldn't be)
-    line = line.rstrip('\n')            # strip EOL
+    line = []
+    first_rd_tm = 0  # Global for tracking unit awake time.
+    eol_f = False
+    while not eol_f:
+        for c in ser.read():
+            if first_rd_tm == 0:
+                first_rd_tm = time.time()
+            # x = chr(c)
+            # print (f'c= {c}; chr c = {x}')
+            if c in range(20,127):    #drop out unprintables
+                line.append(chr(c))
+            if c in ['\n', 0X0A, 0X0D]:
+                eol_f = True
+    ser.close()
+    last_rd_tm = time.time()
+    num_chars = len(line)
+    line = ''.join(line)
+    tot_tm = last_rd_tm-first_rd_tm
+    if PrintVerbose:
+        print_time(f'read {len(line)} characters in ', tot_tm)
+    return {'first_char_tm': first_rd_tm, 'total_rd_tm': tot_tm, 'rd_line': line}
+    # TODO--have to work out how we stick BCC in
+    # probably with ESC
 
-    if PrintTimes:
-        print_time('Elapsed time for readline: ',at0)
-    return line
 
 def check_response(resp):
     """
@@ -615,33 +652,41 @@ def tellStation(COM, dictentry, alrmmin):
     alarm = now + timedelta(minutes=arpt)
     stralarm = alarm.strftime("%b %d %Y %H:%M")
     outstr = f'{CurAdr},{NewAdr},{strnow},{stralarm},0\r'  # make a byte str
-    if PrintVerbose:
-        print(f"Tell the Field Unit: {outstr}")
-
-    ser_wrt(COM, outstr)  
+    ser_wrt(COM, outstr)
     # if Station responds AOK, update
-    
-    StaResp = get_unit_response(COM, 50)    # sb "AOK"; "AWOL" if no response
+
+    sr_dict = get_unit_response(COM, 50)    # sb "AOK"; "AWOL" if no response
+    StaResp = sr_dict['rd_line']
+# return {'first_char_tm': first_rd_tm, 'total_rd_tm': tot_tm, 'rd_line': line}
     if PrintVerbose:
         print(f"Unit TellStation RAW Response is {StaResp}")
     StaResp = StaResp.split(';')[0]
     if StaResp == "AOK":
-        if CurAdr != NewAdr:
-# TODO !!!!. This isn't going to update file.  Need to write new file
-# TODO !!!! line by line.
-            dictentry['Station_Name_Old'] = dictentry['Station_Name_New']
-            print(f" Station Name changed from {CurAdr} to {NewAdr}")
+        unit_end_tm = time.time()
+        # if = AOK, cupdate old name to new name, even if no change.
+        df = pd.read_csv(StaDict_lcl)
+        tst = df.Station_Name_Old == CurAdr     # find index of CurAdr
+        tl = df.index[tst].tolist()
+        # tl is list with all indices matching CurAdr. s.b len = 1 (exactly)
+        if not (len(tl) == 1):  # has to be exactly one
+            print(f'Missing or duplicate station name {CurAdr}.  Should not happen ')
+            print(f'total {len(tl)} entires, should be exactly one')
+
+        # print(f'{CurAdr} index is {tl[0]}')
+        dfdict = df.to_dict()   # dictionary of dictionaries
+        dfdict['Station_Name_Old'][tl[0]] = dfdict['Station_Name_New'][tl[0]]
+        df = df.from_dict(dfdict)
         if PrintVerbose:
-            with open(StaDict_lcl) as fo:
-                for line in fo:
-                    print(f'current unit directory: {line}')
+            (f'dict after change: {df}')
+        df.to_csv(StaDict_lcl, encoding='utf-8', index=False)
         upload_file(StaDict_lcl, StaDict_db)
+        # not a problem here--Unit went to sleep with "AOK"
         ret_aok = True
     
     if PrintTimes:
         print(f'tell_station elapsed time = {time.time() - t0}')
 
-    return ret_aok
+    return unit_end_tm, ret_aok
 
 def get_directory_line(unit_report):
 
@@ -658,35 +703,33 @@ def get_directory_line(unit_report):
     """
     # At program init, this StaDict was formed.
     # what we want is the address of the unit reporting
+    # pandas
+    # my_dict = {row[0]: row[1] for row in df.values}
+
     linelist = unit_report.split(',')   # now a list split by ','
     UnitAdr = linelist[UNIT_RESP_HDGS.index('StaID')]   # sb[0]
     entryfound = False
-    # if PrintVerbose:
-    #     print(f'get_directory_line: unit adr = {UnitAdr} ')
+    df = pd.read_csv(StaDict_lcl)
+    # dfdict = df.to_dict()
+    tst = df.Station_Name_Old == UnitAdr  # find index of CurAdr
+    tlst = df.index[tst].tolist()
+    # tlst has list of entries--if 0, no entry, if one, entry exists
 
-    with open(StaDict_lcl) as fr:   #job is to find if StaAdr has an entry
-        unitdictreader = DictReader(fr)
-        for line in unitdictreader:
-            if line['Station_Name_Old'] == UnitAdr:
-                entryfound = True
-                unitdictline = line
-                # if PrintVerbose:
-                #     print(f'get_directory_line:dir entry for {UnitAdr} = {line}')
-            # found the
-# There is never a "Newbie" in the Dict.  Need to find the next Newbie_N
-    if not entryfound:  # ???? not in dict,make new entry (file also?)
+    if len(tlst) == 1:  # Already here, get the dict for return
+        dictline = dict(zip(UNIT_DIRECTORY_HDGS,df.loc[tlst[0]]))
+        # no change necessary
+
+    if len(tlst) == 0:  # New (to us)
         if UnitAdr == "Newbie":
             UnitAdr = GetNewbie()
-        with open(StaDict_lcl, "a+") as fo:
-            directorystr = (f'{UnitAdr},{UnitAdr},Snsr0_Nm,Snsr1_Nm,Snsr2_Nm,'
-                            f'Snsr3_Nm,SnsrRef_Nm,Temp_Nm,{AlarmDelay},3,7,30,360')
-            fo.write(directorystr)  #append
-# have dictionary entry, new or created
-# cannot update files until Station has been told and responded.
-            unitdictline = dict(zip(UNIT_DIRECTORY_HDGS, directorystr.split(',')))
-            upload_file(StaDict_lcl, StaDict_db)     # upload it to DB
-            
-    return unitdictline   #dictionary line out of UnitDirectory
+        directorystr = (f'{UnitAdr},{UnitAdr},One ft,Two_ft,Three_ft,'
+                        f'48 inches,SnsrRef_Nm,Temp_Nm,{AlarmDelay},3,7,30,360')
+        dictline = dict(zip(UNIT_DIRECTORY_HDGS, directorystr))
+        df.loc[len(df)] = directorystr
+        df.to_csv(StaDict_lcl)
+        # don't upload here--tell station does that.  requires AOK from unit
+
+    return dictline   #dictionary line out of UnitDirectory
 
 
 
@@ -762,20 +805,13 @@ def make_resp_dict(line):
     linelist = line.split(',')
     return dict(zip(UNIT_RESP_HDGS, linelist))
 
-def ohms_adj(slist, tfact, toff):
+def ohms_adj(ohms, temp, tfact, toff):
     """
-    slist is station response split on ','
-    uses Ohms0, Ohms1... to create OhmsAdj0, OhmsAdj1...
-    uses data_f_hdg_index
-    returns expanded list
-     Line0 = [float(i[col])/(1+tfact*(toff-float(i[tcol])))
-             for i in data[1::]]
-    """
-    temp = slist[data_file_hdg_index['Temp']]
 
-    for oi in range (data_file_hdg_index['Ohms0'], (data_file_hdg_index['Ohms3']+1)):
-        slist[oi] = str(int(float(slist[oi])/(1+tfact*(toff-float(temp)))))
-    return slist
+    """
+    ohms_adj = int(float(ohms)/(1 + float(tfact*(toff -temp))))
+
+    return ohms_adj
         
 
 def make_data_file_entry(unit_resp, unitdict,unit_aok):
@@ -835,11 +871,11 @@ def make_hdgs_dict(hdgs_list):
 def main():
     comlist = serial_ports()
     global COM    # make it available outside
+    global first_rd_tm  # to keep track of station awake time.
     with serial.Serial(comlist[0], 9600) as ser:
         COM = ser.port   # this is a readback of comlist[0]
     print(f'Hello, World! ; System Platform = {sys.platform}')
     print(f'Connected to {COM} @ {get_time()}\n')  # COM was global defined at init
-
     global data_file_hdg_index
     data_file_hdg_index = make_hdgs_dict(DATA_FILE_HDGS)
     #print (f' data file headings dictionary = {data_file_hdg_index}')
@@ -858,21 +894,27 @@ def main():
         # only good line here is one with len = len Hdgs--s.b above
         unit_aok = False
         good_response = False
-        while not unit_aok:
+
+        while not unit_aok:     #waiting for data
             while not good_response:
-                unit_resp = get_unit_response(COM, None)  
-                if (len(unit_resp.split(',')) == hdglen):
-                    good_response = check_response(unit_resp)   # various checks
-                elif(PrintVerbose):
+                resp_dict = get_unit_response(COM, None)
+                unit_resp = resp_dict['rd_line']
+                start_unit_timer = resp_dict['first_char_tm']
+            # return {'first_char_tm': first_rd_tm, 'total_rd_tm': tot_tm, 'rd_line': line}
+                if len(unit_resp.split(',')) == hdglen:
+                    good_response = check_response(resp_dict['rd_line'])   # various checks
+                elif PrintVerbose:
                     print(f'discarded comment/out of order = {unit_resp} ')
 
             # as of here, we have a good unit data stream
-            download_file(StaDict_lcl, StaDict_db)  
+            # download_file(StaDict_lcl, StaDict_db)
             # TODO--make this asynch. Station is hung up dring download TODO
     
-            dictline = get_directory_line(unit_resp) 
+            dictline = get_directory_line(unit_resp)
+            print_time('awake after get directory_line',start_unit_timer)
             # dict line = dictionary line UnitDir
-            unit_aok = tellStation(COM, dictline, AlarmDelay)
+            unit_dn_tm, unit_aok = tellStation(COM, dictline, AlarmDelay)
+            print(f'Unit was awake {unit_dn_tm - start_unit_timer} ')
             # tellStation updates StaDict_lcl ONLY if Station says AOK
             # chks for/creates local/db files entry
             # returns True if good response        
@@ -913,9 +955,13 @@ def main():
                 if rpt_tm not in NO_PLOT_LIST:
                  #   with open (lcl_dat_f_nm, 'r') as fr:
 
-                    trimfile(lcl_dat_f_nm,int(rpt_tm))  # creates trimfile.csv
+                    trimfile(lcl_dat_f_nm, int(rpt_tm), dictline)  # creates trimfile.csv
                     # print(f'ftrim created for {rpt_tm} days')
         plt.close('all')
+        download_file(StaDict_lcl, StaDict_db)  # not while station awake. Consequence:
+        # most of time, change won't take place until NEXT response
+        print_time(f'Total time for whole McGillicudy = ', start_unit_timer)
+        print(f'\n')
 # TODO  rework or new function to adjust raw ohms, change trimfile header
 # so that plot just plots the headers???
 
