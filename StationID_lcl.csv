@@ -1,3 +1,3 @@
 Station_Name_Old,Station_Name_New,Snsr0_Nm,Snsr1_Nm,Snsr2_Nm,Snsr3_Nm,SnsrRef_Nm,Temp_Nm,Report H.h,Rpt1,Rpt2,Rpt3,Rpt4
-19Jan19_Tst,19Jan19_Tst2,Snsr0_Nm,Snsr1_Nm,Snsr2_Nm,Snsr3_Nm,SnsrRef_Nm,Temp_Nm,0.033,3,7,30,360
-19Jan19_Tst2,19Jan19_Tst2, ,george,harry,ivan,SnsrRef_Nm,degreesC,0.033,3,7,30,360
+RPM5Feb19,RPM8Feb19,None,Two_ft,Three_ft,48 inches,SnsrRef_Nm,Temp_Nm,0.033,3,7,30,360
+RPM8Feb19v2,RPM8Feb19v2,One ft,Two_ft,Three_ft,48 inches,SnsrRef_Nm,Temp_Nm,0.033,3,7,30,360
